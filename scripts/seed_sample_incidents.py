@@ -45,10 +45,7 @@ async def main() -> None:
             elif response.status_code == 409:
                 print(f"Already exists: {sample['external_id']}")
             else:
-                print(
-                    f"Failed {sample['external_id']}: "
-                    f"{response.status_code} {response.text}"
-                )
+                print(f"Failed {sample['external_id']}: {response.status_code} {response.text}")
 
 
 if __name__ == "__main__":

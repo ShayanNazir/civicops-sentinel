@@ -28,9 +28,6 @@ class IncidentRepository:
         offset: int,
     ) -> list[Incident]:
         result = await db.execute(
-            select(Incident)
-            .order_by(Incident.created_at.desc())
-            .limit(limit)
-            .offset(offset)
+            select(Incident).order_by(Incident.created_at.desc()).limit(limit).offset(offset)
         )
         return list(result.scalars().all())
