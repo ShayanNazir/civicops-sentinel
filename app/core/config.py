@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     nyc_311_dataset_id: str = "erm2-nwe9"
     nyc_open_data_app_token: str | None = None
     nyc_311_page_size: int = 100
+    nyc_311_initial_lookback_hours: int = 24
+    nyc_311_cursor_overlap_minutes: int = 5
+    nyc_311_max_pages_per_run: int = 20
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from pydantic import ValidationError
@@ -91,6 +91,7 @@ class NYC311Client:
         *,
         created_after: datetime | None,
         created_before: datetime | None,
+        sort_direction: Literal["asc", "desc"],
     ) -> str:
         filters: list[str] = []
 
@@ -108,7 +109,8 @@ class NYC311Client:
             query += " WHERE " + " AND ".join(filters)
 
         # Stable ordering is essential when retrieving multiple pages.
-        query += " ORDER BY created_date DESC, unique_key DESC"
+        direction = sort_direction.upper()
+        query += f" ORDER BY created_date {direction}, unique_key {direction}"
 
         return query
 
@@ -119,19 +121,24 @@ class NYC311Client:
         page_size: int | None = None,
         created_after: datetime | None = None,
         created_before: datetime | None = None,
+        sort_direction: Literal["asc", "desc"] = "desc",
     ) -> list[NYC311Record]:
         if page_number < 1:
             raise ValueError("page_number must be at least 1")
 
-        resolved_page_size = page_size or self.settings.nyc_311_page_size
+        resolved_page_size = page_size if page_size is not None else self.settings.nyc_311_page_size
 
         if not 1 <= resolved_page_size <= 5_000:
             raise ValueError("page_size must be between 1 and 5000")
+
+        if sort_direction not in {"asc", "desc"}:
+            raise ValueError("sort_direction must be either 'asc' or 'desc'")
 
         payload: dict[str, Any] = {
             "query": self._build_query(
                 created_after=created_after,
                 created_before=created_before,
+                sort_direction=sort_direction,
             ),
             "page": {
                 "pageNumber": page_number,
