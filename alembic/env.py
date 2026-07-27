@@ -7,6 +7,7 @@ from alembic import context
 from app.core.config import get_settings
 from app.db.base import Base
 from app.models.incident import Incident  # noqa: F401
+from app.models.ingestion_checkpoint import IngestionCheckpoint  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
