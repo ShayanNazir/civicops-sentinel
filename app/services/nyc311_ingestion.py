@@ -33,7 +33,7 @@ class NYC311SyncResult:
     upserted: int
     window_started_at: datetime
     window_ended_at: datetime
-    checkpoint_created_at: datetime
+    checkpoint_created_at: datetime | None
     reached_page_limit: bool
 
 
@@ -93,21 +93,39 @@ async def sync_nyc311(
 
     settings = get_settings()
 
-    resolved_page_size = page_size or settings.nyc_311_page_size
-    resolved_max_pages = max_pages or settings.nyc_311_max_pages_per_run
+    resolved_page_size = (
+        page_size
+        if page_size is not None
+        else settings.nyc_311_page_size
+    )
+    resolved_max_pages = (
+        max_pages
+        if max_pages is not None
+        else settings.nyc_311_max_pages_per_run
+    )
+
+    if resolved_page_size < 1:
+        raise ValueError("page_size must be at least 1")
 
     if resolved_max_pages < 1:
         raise ValueError("max_pages must be at least 1")
 
-    window_ended_at = normalize_utc(run_started_at or datetime.now(UTC))
+    window_ended_at = normalize_utc(
+        run_started_at or datetime.now(UTC)
+    )
 
     checkpoint = await IngestionCheckpointRepository.get(
         db,
         NYC311_SOURCE,
     )
 
-    if checkpoint is not None and checkpoint.last_successful_created_at is not None:
-        window_started_at = normalize_utc(checkpoint.last_successful_created_at) - timedelta(
+    if (
+        checkpoint is not None
+        and checkpoint.last_successful_created_at is not None
+    ):
+        window_started_at = normalize_utc(
+            checkpoint.last_successful_created_at
+        ) - timedelta(
             minutes=settings.nyc_311_cursor_overlap_minutes
         )
     else:
@@ -151,9 +169,14 @@ async def sync_nyc311(
             incident_rows: list[dict[str, Any]] = []
 
             for record in records:
-                record_created_at = normalize_utc(record.created_date)
+                record_created_at = normalize_utc(
+                    record.created_date
+                )
 
-                if latest_created_at is None or record_created_at > latest_created_at:
+                if (
+                    latest_created_at is None
+                    or record_created_at > latest_created_at
+                ):
                     latest_created_at = record_created_at
 
                 mapped_record = map_nyc311_record(record)
@@ -166,9 +189,11 @@ async def sync_nyc311(
 
             total_accepted += len(incident_rows)
 
-            total_upserted += await IncidentRepository.upsert_many(
-                db,
-                incident_rows,
+            total_upserted += (
+                await IncidentRepository.upsert_many(
+                    db,
+                    incident_rows,
+                )
             )
 
             if len(records) < resolved_page_size:
@@ -177,10 +202,9 @@ async def sync_nyc311(
             if page_number == resolved_max_pages:
                 reached_page_limit = True
 
-        if reached_page_limit and latest_created_at is not None:
-            next_checkpoint = latest_created_at
-        else:
-            next_checkpoint = window_ended_at
+        # Only advance the cursor when the API actually returned a record.
+        # This prevents a delayed source from causing records to be skipped.
+        next_checkpoint = latest_created_at
 
         await IngestionCheckpointRepository.mark_succeeded(
             db,

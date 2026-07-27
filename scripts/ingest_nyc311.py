@@ -29,15 +29,32 @@ async def main() -> None:
     print(f"  Pages processed: {result.pages_processed}")
     print(f"  Records fetched: {result.fetched}")
     print(f"  Records accepted: {result.accepted}")
-    print(f"  Missing coordinates: {result.skipped_missing_coordinates}")
+    print(
+        "  Missing coordinates: "
+        f"{result.skipped_missing_coordinates}"
+    )
     print(f"  Records upserted: {result.upserted}")
     print(
         "  Sync window: "
         f"{result.window_started_at.isoformat()} "
         f"to {result.window_ended_at.isoformat()}"
     )
-    print(f"  New checkpoint: {result.checkpoint_created_at.isoformat()}")
-    print(f"  Reached page limit: {result.reached_page_limit}")
+
+    if result.checkpoint_created_at is None:
+        print(
+            "  New checkpoint: unchanged because "
+            "no records were returned"
+        )
+    else:
+        print(
+            "  New checkpoint: "
+            f"{result.checkpoint_created_at.isoformat()}"
+        )
+
+    print(
+        "  Reached page limit: "
+        f"{result.reached_page_limit}"
+    )
 
 
 if __name__ == "__main__":
