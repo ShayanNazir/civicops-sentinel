@@ -33,7 +33,10 @@ class IncidentRepository:
         db: AsyncSession,
         incident_id: UUID,
     ) -> Incident | None:
-        return await db.get(Incident, incident_id)
+        return await db.get(
+            Incident,
+            incident_id,
+        )
 
     @staticmethod
     async def list(
@@ -41,10 +44,45 @@ class IncidentRepository:
         *,
         limit: int,
         offset: int,
+        source: str | None = None,
+        borough: str | None = None,
+        nta_code: str | None = None,
+        cdta_code: str | None = None,
+        census_tract_geoid: str | None = None,
+        geospatial_status: str | None = None,
     ) -> list[Incident]:
-        result = await db.execute(
-            select(Incident).order_by(Incident.created_at.desc()).limit(limit).offset(offset)
+        """List incidents using optional geographic filters."""
+
+        statement = select(Incident)
+
+        if source is not None:
+            statement = statement.where(Incident.source == source)
+
+        if borough is not None:
+            statement = statement.where(Incident.borough_name == borough)
+
+        if nta_code is not None:
+            statement = statement.where(Incident.nta_code == nta_code)
+
+        if cdta_code is not None:
+            statement = statement.where(Incident.cdta_code == cdta_code)
+
+        if census_tract_geoid is not None:
+            statement = statement.where(Incident.census_tract_geoid == census_tract_geoid)
+
+        if geospatial_status is not None:
+            statement = statement.where(Incident.geospatial_status == geospatial_status)
+
+        statement = (
+            statement.order_by(
+                Incident.created_at.desc(),
+                Incident.id.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
         )
+
+        result = await db.execute(statement)
 
         return list(result.scalars().all())
 
@@ -66,15 +104,15 @@ class IncidentRepository:
         insert_statement = insert(Incident).values(list(rows))
 
         upsert_statement = insert_statement.on_conflict_do_update(
-            constraint="uq_incident_source_external_id",
+            constraint=("uq_incident_source_external_id"),
             set_={
-                "description": insert_statement.excluded.description,
-                "latitude": insert_statement.excluded.latitude,
-                "longitude": insert_statement.excluded.longitude,
-                "media_urls": insert_statement.excluded.media_urls,
-                "status": insert_statement.excluded.status,
-                "priority": insert_statement.excluded.priority,
-                "context_data": insert_statement.excluded.context_data,
+                "description": (insert_statement.excluded.description),
+                "latitude": (insert_statement.excluded.latitude),
+                "longitude": (insert_statement.excluded.longitude),
+                "media_urls": (insert_statement.excluded.media_urls),
+                "status": (insert_statement.excluded.status),
+                "priority": (insert_statement.excluded.priority),
+                "context_data": (insert_statement.excluded.context_data),
                 "updated_at": func.now(),
             },
         )
@@ -93,7 +131,7 @@ class IncidentRepository:
         """
         Select pending incidents for geospatial enrichment.
 
-        Locked rows are skipped so multiple workers can safely process
+        Locked rows are skipped so multiple workers can process
         separate batches without selecting the same incidents.
         """
 
