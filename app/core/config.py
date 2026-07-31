@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     nyc_311_cursor_overlap_minutes: int = 5
     nyc_311_max_pages_per_run: int = 20
 
+    nyc_2020_census_tracts_dataset_id: str = "63ge-mke6"
+    nyc_boundary_cache_ttl_seconds: int = 86_400
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
