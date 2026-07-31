@@ -1,92 +1,52 @@
 import asyncio
+from datetime import UTC, datetime
 
 from app.integrations.nws.client import (
     NWSClient,
     NWSClientError,
+)
+from app.integrations.nws.resolver import (
+    resolve_hourly_weather,
 )
 
 
 async def main() -> None:
     latitude = 40.7580
     longitude = -73.9855
+    requested_at = datetime.now(UTC)
 
-    print("Loading NWS point metadata...")
+    print("Resolving hourly NWS weather...")
 
     try:
         async with NWSClient() as client:
-            point = await client.fetch_point(
+            weather = await resolve_hourly_weather(
+                client,
                 latitude=latitude,
                 longitude=longitude,
-            )
-
-            forecast = (
-                await client.fetch_hourly_forecast(
-                    forecast_url=(
-                        point.properties
-                        .forecast_hourly_url
-                    ),
-                )
+                at=requested_at,
             )
 
     except NWSClientError as exc:
         print(f"NWS smoke test failed: {exc}")
         raise SystemExit(1) from exc
 
-    if not forecast.properties.periods:
-        raise RuntimeError(
-            "NWS returned no hourly forecast periods"
-        )
+    if weather is None:
+        raise RuntimeError("No hourly forecast period contained the requested timestamp")
 
-    first_period = forecast.properties.periods[0]
-    precipitation = (
-        first_period
-        .probability_of_precipitation
-    )
-
-    precipitation_value = (
-        precipitation.value
-        if precipitation is not None
-        else None
-    )
-
-    print("NWS smoke test completed.")
-    print(f"  WFO: {point.properties.cwa}")
+    print("NWS weather resolver completed.")
+    print(f"  WFO: {weather.office}")
+    print(f"  Grid: {weather.grid_id} {weather.grid_x},{weather.grid_y}")
+    print(f"  Time zone: {weather.time_zone}")
+    print(f"  Requested at: {weather.requested_at.isoformat()}")
+    print(f"  Forecast updated: {weather.forecast_updated_at.isoformat()}")
     print(
-        "  Grid: "
-        f"{point.properties.grid_id} "
-        f"{point.properties.grid_x},"
-        f"{point.properties.grid_y}"
+        f"  Selected period: {weather.period_start.isoformat()} to {weather.period_end.isoformat()}"
     )
-    print(
-        "  Time zone: "
-        f"{point.properties.time_zone}"
-    )
-    print(
-        "  Forecast updated: "
-        f"{forecast.properties.update_time.isoformat()}"
-    )
-    print(
-        "  First period: "
-        f"{first_period.start_time.isoformat()}"
-    )
-    print(
-        "  Temperature: "
-        f"{first_period.temperature} "
-        f"{first_period.temperature_unit}"
-    )
-    print(
-        "  Precipitation probability: "
-        f"{precipitation_value}%"
-    )
-    print(
-        "  Wind: "
-        f"{first_period.wind_speed} "
-        f"{first_period.wind_direction}"
-    )
-    print(
-        "  Conditions: "
-        f"{first_period.short_forecast}"
-    )
+    print(f"  Temperature: {weather.temperature} {weather.temperature_unit}")
+    print(f"  Precipitation probability: {weather.precipitation_probability_percent}%")
+    print(f"  Relative humidity: {weather.relative_humidity_percent}%")
+    print(f"  Wind: {weather.wind_speed} {weather.wind_direction}")
+    print(f"  Conditions: {weather.short_forecast}")
 
 
 if __name__ == "__main__":
