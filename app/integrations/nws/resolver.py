@@ -2,7 +2,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from app.integrations.nws.client import NWSClient
+from app.integrations.nws.provider import (
+    NWSDataSource,
+    NWSProvider,
+)
 from app.integrations.nws.schemas import (
     NWSForecastPeriod,
     NWSQuantitativeValue,
@@ -14,6 +17,9 @@ class ResolvedHourlyWeather:
     """Weather forecast resolved for one coordinate and time."""
 
     requested_at: datetime
+
+    point_source: NWSDataSource
+    forecast_source: NWSDataSource
 
     office: str
     grid_id: str
@@ -76,8 +82,12 @@ def select_forecast_period(
     resolved_at = normalize_utc(at)
 
     for period in periods:
-        period_start = normalize_utc(period.start_time)
-        period_end = normalize_utc(period.end_time)
+        period_start = normalize_utc(
+            period.start_time
+        )
+        period_end = normalize_utc(
+            period.end_time
+        )
 
         if period_start <= resolved_at < period_end:
             return period
@@ -86,7 +96,7 @@ def select_forecast_period(
 
 
 async def resolve_hourly_weather(
-    client: NWSClient,
+    provider: NWSProvider,
     *,
     latitude: float,
     longitude: float,
@@ -94,18 +104,26 @@ async def resolve_hourly_weather(
 ) -> ResolvedHourlyWeather | None:
     """Resolve an hourly NWS forecast for a coordinate."""
 
-    requested_at = normalize_utc(at or datetime.now(UTC))
+    requested_at = normalize_utc(
+        at or datetime.now(UTC)
+    )
 
-    point = await client.fetch_point(
+    point_result = await provider.get_point(
         latitude=latitude,
         longitude=longitude,
     )
+    point = point_result.response
 
-    forecast_url = point.properties.forecast_hourly_url
-
-    forecast = await client.fetch_hourly_forecast(
-        forecast_url=forecast_url,
+    forecast_url = (
+        point.properties.forecast_hourly_url
     )
+
+    forecast_result = (
+        await provider.get_hourly_forecast(
+            forecast_url=forecast_url,
+        )
+    )
+    forecast = forecast_result.response
 
     period = select_forecast_period(
         forecast.properties.periods,
@@ -115,14 +133,17 @@ async def resolve_hourly_weather(
     if period is None:
         return None
 
-    precipitation = period.probability_of_precipitation
+    precipitation = (
+        period.probability_of_precipitation
+    )
     humidity = period.relative_humidity
     dewpoint = period.dewpoint
-
     generated_at = forecast.properties.generated_at
 
     return ResolvedHourlyWeather(
         requested_at=requested_at,
+        point_source=point_result.source,
+        forecast_source=forecast_result.source,
         office=point.properties.cwa,
         grid_id=point.properties.grid_id,
         grid_x=point.properties.grid_x,
@@ -130,20 +151,42 @@ async def resolve_hourly_weather(
         time_zone=point.properties.time_zone,
         radar_station=point.properties.radar_station,
         forecast_url=forecast_url,
-        forecast_updated_at=normalize_utc(forecast.properties.update_time),
-        forecast_generated_at=(normalize_utc(generated_at) if generated_at is not None else None),
-        period_start=normalize_utc(period.start_time),
-        period_end=normalize_utc(period.end_time),
+        forecast_updated_at=normalize_utc(
+            forecast.properties.update_time
+        ),
+        forecast_generated_at=(
+            normalize_utc(generated_at)
+            if generated_at is not None
+            else None
+        ),
+        period_start=normalize_utc(
+            period.start_time
+        ),
+        period_end=normalize_utc(
+            period.end_time
+        ),
         is_daytime=period.is_daytime,
         temperature=period.temperature,
         temperature_unit=period.temperature_unit,
-        precipitation_probability_percent=(measurement_value(precipitation)),
-        relative_humidity_percent=(measurement_value(humidity)),
-        dewpoint_value=measurement_value(dewpoint),
-        dewpoint_unit_code=(dewpoint.unit_code if dewpoint is not None else None),
+        precipitation_probability_percent=(
+            measurement_value(precipitation)
+        ),
+        relative_humidity_percent=(
+            measurement_value(humidity)
+        ),
+        dewpoint_value=measurement_value(
+            dewpoint
+        ),
+        dewpoint_unit_code=(
+            dewpoint.unit_code
+            if dewpoint is not None
+            else None
+        ),
         wind_speed=period.wind_speed,
         wind_direction=period.wind_direction,
         short_forecast=period.short_forecast,
-        detailed_forecast=(period.detailed_forecast),
+        detailed_forecast=(
+            period.detailed_forecast
+        ),
         icon_url=period.icon,
     )

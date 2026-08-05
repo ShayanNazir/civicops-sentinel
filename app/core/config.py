@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     nws_request_timeout_seconds: float = 20.0
     nws_max_retries: int = 3
     nws_retry_base_delay_seconds: float = 0.5
+    nws_point_cache_ttl_seconds: int = 604_800
+    nws_hourly_forecast_cache_ttl_seconds: int = 900
 
     model_config = SettingsConfigDict(
         env_file=".env",

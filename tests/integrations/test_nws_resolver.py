@@ -3,7 +3,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.integrations.nws.client import NWSClient
+from app.integrations.nws.provider import (
+    NWSHourlyForecastLoadResult,
+    NWSPointLoadResult,
+    NWSProvider,
+)
 from app.integrations.nws.resolver import (
     resolve_hourly_weather,
     select_forecast_period,
@@ -170,9 +174,21 @@ async def test_resolver_returns_structured_weather() -> None:
         temperature=84,
     )
 
-    client = MagicMock(spec=NWSClient)
-    client.fetch_point = AsyncMock(return_value=build_point_response())
-    client.fetch_hourly_forecast = AsyncMock(return_value=build_forecast_response([period]))
+    provider = MagicMock(spec=NWSProvider)
+
+    provider.get_point = AsyncMock(
+        return_value=NWSPointLoadResult(
+            response=build_point_response(),
+            source="redis",
+        )
+    )
+
+    provider.get_hourly_forecast = AsyncMock(
+        return_value=NWSHourlyForecastLoadResult(
+            response=build_forecast_response([period]),
+            source="network",
+        )
+    )
 
     requested_at = datetime(
         2026,
@@ -184,13 +200,16 @@ async def test_resolver_returns_structured_weather() -> None:
     )
 
     weather = await resolve_hourly_weather(
-        client,
+        provider,
         latitude=40.7580,
         longitude=-73.9855,
         at=requested_at,
     )
 
     assert weather is not None
+
+    assert weather.point_source == "redis"
+    assert weather.forecast_source == "network"
 
     assert weather.office == "OKX"
     assert weather.grid_id == "OKX"
@@ -206,12 +225,14 @@ async def test_resolver_returns_structured_weather() -> None:
     assert weather.wind_direction == "SW"
     assert weather.short_forecast == "Mostly Sunny"
 
-    client.fetch_point.assert_awaited_once_with(
+    provider.get_point.assert_awaited_once_with(
         latitude=40.7580,
         longitude=-73.9855,
     )
 
-    client.fetch_hourly_forecast.assert_awaited_once()
+    provider.get_hourly_forecast.assert_awaited_once_with(
+        forecast_url=("https://api.weather.gov/gridpoints/OKX/34,44/forecast/hourly")
+    )
 
 
 @pytest.mark.asyncio
@@ -223,12 +244,24 @@ async def test_resolver_returns_none_outside_range() -> None:
         temperature=84,
     )
 
-    client = MagicMock(spec=NWSClient)
-    client.fetch_point = AsyncMock(return_value=build_point_response())
-    client.fetch_hourly_forecast = AsyncMock(return_value=build_forecast_response([period]))
+    provider = MagicMock(spec=NWSProvider)
+
+    provider.get_point = AsyncMock(
+        return_value=NWSPointLoadResult(
+            response=build_point_response(),
+            source="redis",
+        )
+    )
+
+    provider.get_hourly_forecast = AsyncMock(
+        return_value=NWSHourlyForecastLoadResult(
+            response=build_forecast_response([period]),
+            source="redis",
+        )
+    )
 
     weather = await resolve_hourly_weather(
-        client,
+        provider,
         latitude=40.7580,
         longitude=-73.9855,
         at=datetime(
@@ -242,3 +275,10 @@ async def test_resolver_returns_none_outside_range() -> None:
     )
 
     assert weather is None
+
+    provider.get_point.assert_awaited_once_with(
+        latitude=40.7580,
+        longitude=-73.9855,
+    )
+
+    provider.get_hourly_forecast.assert_awaited_once()
