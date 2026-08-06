@@ -32,6 +32,10 @@ class NWSClientError(RuntimeError):
     """Raised when NWS data cannot be retrieved or validated."""
 
 
+class NWSNotFoundError(NWSClientError):
+    """Raised when NWS has no forecast for a resource."""
+
+
 class NWSClient:
     """Asynchronous client for the NWS weather API."""
 
@@ -204,6 +208,9 @@ class NWSClient:
                     try:
                         response.raise_for_status()
                     except httpx.HTTPStatusError as exc:
+                        if response.status_code == 404:
+                            raise NWSNotFoundError("NWS forecast resource was not found.") from exc
+
                         raise NWSClientError(
                             f"NWS request failed with HTTP {response.status_code}."
                         ) from exc
