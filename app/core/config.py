@@ -8,9 +8,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
 
-    database_url: str = (
-        "postgresql+asyncpg://civicops:civicops@localhost:5432/civicops"
-    )
+    database_url: str = "postgresql+asyncpg://civicops:civicops@localhost:5432/civicops"
     redis_url: str = "redis://localhost:6379/0"
 
     nyc_open_data_base_url: str = "https://data.cityofnewyork.us"
@@ -24,6 +22,14 @@ class Settings(BaseSettings):
 
     nyc_2020_census_tracts_dataset_id: str = "63ge-mke6"
     nyc_boundary_cache_ttl_seconds: int = 86_400
+
+    nws_api_base_url: str = "https://api.weather.gov"
+    nws_user_agent: str = "civicops-sentinel/0.1.0 (github.com/ShayanNazir/civicops-sentinel)"
+    nws_request_timeout_seconds: float = 20.0
+    nws_max_retries: int = 3
+    nws_retry_base_delay_seconds: float = 0.5
+    nws_point_cache_ttl_seconds: int = 604_800
+    nws_hourly_forecast_cache_ttl_seconds: int = 900
 
     model_config = SettingsConfigDict(
         env_file=".env",

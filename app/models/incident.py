@@ -3,7 +3,9 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
+    Integer,
     Numeric,
     String,
     Text,
@@ -112,6 +114,128 @@ class Incident(Base):
     )
     cdta_name: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True,
+    )
+
+    weather_status: Mapped[str] = mapped_column(
+        String(20),
+        default="pending",
+        server_default="pending",
+        index=True,
+    )
+    weather_enriched_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    weather_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    weather_point_source: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+    weather_forecast_source: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    nws_office: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+        index=True,
+    )
+    nws_grid_id: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+    )
+    nws_grid_x: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    nws_grid_y: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    weather_time_zone: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    weather_radar_station: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    weather_forecast_url: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    weather_forecast_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    weather_forecast_generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    weather_period_start: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    weather_period_end: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    weather_is_daytime: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+    )
+
+    weather_temperature: Mapped[Decimal | None] = mapped_column(
+        Numeric(6, 2),
+        nullable=True,
+    )
+    weather_temperature_unit: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+    )
+    weather_precipitation_probability_percent: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2),
+        nullable=True,
+    )
+    weather_relative_humidity_percent: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2),
+        nullable=True,
+    )
+    weather_dewpoint_value: Mapped[Decimal | None] = mapped_column(
+        Numeric(6, 2),
+        nullable=True,
+    )
+    weather_dewpoint_unit_code: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    weather_wind_speed: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+    weather_wind_direction: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+    weather_short_forecast: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    weather_detailed_forecast: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    weather_icon_url: Mapped[str | None] = mapped_column(
+        Text,
         nullable=True,
     )
 

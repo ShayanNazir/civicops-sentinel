@@ -18,9 +18,9 @@ client = TestClient(app)
 def build_incident() -> SimpleNamespace:
     timestamp = datetime(
         2026,
-        7,
-        31,
-        18,
+        8,
+        6,
+        20,
         0,
         tzinfo=UTC,
     )
@@ -48,13 +48,48 @@ def build_incident() -> SimpleNamespace:
         nta_name="Midtown-Times Square",
         cdta_code="MN05",
         cdta_name=("Midtown-Flatiron-Union Square (CD 5 Approximation)"),
+        weather_status="matched",
+        weather_enriched_at=timestamp,
+        weather_requested_at=timestamp,
+        weather_point_source="redis",
+        weather_forecast_source="redis",
+        nws_office="OKX",
+        nws_grid_id="OKX",
+        nws_grid_x=34,
+        nws_grid_y=44,
+        weather_time_zone="America/New_York",
+        weather_radar_station="KOKX",
+        weather_forecast_url=("https://api.weather.gov/gridpoints/OKX/34,44/forecast/hourly"),
+        weather_forecast_updated_at=timestamp,
+        weather_forecast_generated_at=timestamp,
+        weather_period_start=timestamp,
+        weather_period_end=datetime(
+            2026,
+            8,
+            6,
+            21,
+            0,
+            tzinfo=UTC,
+        ),
+        weather_is_daytime=True,
+        weather_temperature=Decimal("82.00"),
+        weather_temperature_unit="F",
+        weather_precipitation_probability_percent=(Decimal("20.00")),
+        weather_relative_humidity_percent=(Decimal("65.00")),
+        weather_dewpoint_value=Decimal("19.00"),
+        weather_dewpoint_unit_code="wmoUnit:degC",
+        weather_wind_speed="5 mph",
+        weather_wind_direction="SW",
+        weather_short_forecast="Partly Cloudy",
+        weather_detailed_forecast=("Partly cloudy with light southwest winds."),
+        weather_icon_url=("https://api.weather.gov/icons/land/day/few"),
         created_at=timestamp,
         updated_at=timestamp,
     )
 
 
 @pytest.mark.asyncio
-async def test_list_incidents_forwards_filters(
+async def test_list_incidents_forwards_all_filters(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repository_list = AsyncMock(return_value=[build_incident()])
@@ -82,6 +117,14 @@ async def test_list_incidents_forwards_filters(
                 "cdta_code": "MN05",
                 "census_tract_geoid": ("36061011900"),
                 "geospatial_status": "matched",
+                "weather_status": "matched",
+                "nws_office": "OKX",
+                "min_temperature": "70",
+                "max_temperature": "90",
+                "min_precipitation_probability": "10",
+                "max_precipitation_probability": "40",
+                "weather_condition": "cloudy",
+                "weather_is_daytime": "true",
             },
         )
     finally:
@@ -93,8 +136,10 @@ async def test_list_incidents_forwards_filters(
 
     assert len(payload) == 1
     assert payload[0]["borough_name"] == "Manhattan"
-    assert payload[0]["nta_code"] == "MN0502"
-    assert payload[0]["cdta_code"] == "MN05"
+    assert payload[0]["weather_status"] == "matched"
+    assert payload[0]["nws_office"] == "OKX"
+    assert payload[0]["weather_temperature"] == "82.00"
+    assert payload[0]["weather_short_forecast"] == "Partly Cloudy"
 
     repository_list.assert_awaited_once()
 
@@ -109,10 +154,18 @@ async def test_list_incidents_forwards_filters(
         "cdta_code": "MN05",
         "census_tract_geoid": "36061011900",
         "geospatial_status": "matched",
+        "weather_status": "matched",
+        "nws_office": "OKX",
+        "min_temperature": Decimal("70"),
+        "max_temperature": Decimal("90"),
+        "min_precipitation_probability": (Decimal("10")),
+        "max_precipitation_probability": (Decimal("40")),
+        "weather_condition": "cloudy",
+        "weather_is_daytime": True,
     }
 
 
-def test_list_incidents_rejects_invalid_status() -> None:
+def test_list_incidents_rejects_invalid_geospatial_status() -> None:
     response = client.get(
         "/api/v1/incidents",
         params={
@@ -121,3 +174,27 @@ def test_list_incidents_rejects_invalid_status() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_list_incidents_rejects_invalid_weather_status() -> None:
+    response = client.get(
+        "/api/v1/incidents",
+        params={
+            "weather_status": "finished",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_list_incidents_rejects_reversed_temperature_range() -> None:
+    response = client.get(
+        "/api/v1/incidents",
+        params={
+            "min_temperature": "90",
+            "max_temperature": "70",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == ("min_temperature cannot be greater than max_temperature.")
