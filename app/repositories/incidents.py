@@ -6,14 +6,16 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.nws.resolver import (
     ResolvedHourlyWeather,
 )
-from app.integrations.nyc_boundaries.index import NYCGeography
+from app.integrations.nyc_boundaries.index import (
+    NYCGeography,
+)
 from app.models.incident import Incident
 from app.schemas.incident import IncidentCreate
 
@@ -65,8 +67,16 @@ class IncidentRepository:
         cdta_code: str | None = None,
         census_tract_geoid: str | None = None,
         geospatial_status: str | None = None,
+        weather_status: str | None = None,
+        nws_office: str | None = None,
+        min_temperature: Decimal | None = None,
+        max_temperature: Decimal | None = None,
+        min_precipitation_probability: (Decimal | None) = None,
+        max_precipitation_probability: (Decimal | None) = None,
+        weather_condition: str | None = None,
+        weather_is_daytime: bool | None = None,
     ) -> list[Incident]:
-        """List incidents using optional geographic filters."""
+        """List incidents using geographic and weather filters."""
 
         statement = select(Incident)
 
@@ -87,6 +97,41 @@ class IncidentRepository:
 
         if geospatial_status is not None:
             statement = statement.where(Incident.geospatial_status == geospatial_status)
+
+        if weather_status is not None:
+            statement = statement.where(Incident.weather_status == weather_status)
+
+        if nws_office is not None:
+            statement = statement.where(func.upper(Incident.nws_office) == nws_office.upper())
+
+        if min_temperature is not None:
+            statement = statement.where(Incident.weather_temperature >= min_temperature)
+
+        if max_temperature is not None:
+            statement = statement.where(Incident.weather_temperature <= max_temperature)
+
+        if min_precipitation_probability is not None:
+            statement = statement.where(
+                Incident.weather_precipitation_probability_percent >= min_precipitation_probability
+            )
+
+        if max_precipitation_probability is not None:
+            statement = statement.where(
+                Incident.weather_precipitation_probability_percent <= max_precipitation_probability
+            )
+
+        if weather_condition is not None:
+            condition_pattern = f"%{weather_condition.strip()}%"
+
+            statement = statement.where(
+                or_(
+                    Incident.weather_short_forecast.ilike(condition_pattern),
+                    Incident.weather_detailed_forecast.ilike(condition_pattern),
+                )
+            )
+
+        if weather_is_daytime is not None:
+            statement = statement.where(Incident.weather_is_daytime == weather_is_daytime)
 
         statement = (
             statement.order_by(
@@ -169,7 +214,12 @@ class IncidentRepository:
     @staticmethod
     async def save_geospatial_results(
         db: AsyncSession,
-        resolutions: Sequence[tuple[Incident, NYCGeography | None]],
+        resolutions: Sequence[
+            tuple[
+                Incident,
+                NYCGeography | None,
+            ]
+        ],
         *,
         enriched_at: datetime,
     ) -> None:
@@ -193,6 +243,7 @@ class IncidentRepository:
                 continue
 
             incident.geospatial_status = "matched"
+
             incident.census_tract_geoid = geography.census_tract_geoid
             incident.census_tract_code = geography.census_tract_code
             incident.census_tract_label = geography.census_tract_label
@@ -319,12 +370,15 @@ class IncidentRepository:
 
             incident.weather_temperature = decimal_or_none(weather.temperature)
             incident.weather_temperature_unit = weather.temperature_unit
+
             incident.weather_precipitation_probability_percent = decimal_or_none(
                 weather.precipitation_probability_percent
             )
+
             incident.weather_relative_humidity_percent = decimal_or_none(
                 weather.relative_humidity_percent
             )
+
             incident.weather_dewpoint_value = decimal_or_none(weather.dewpoint_value)
             incident.weather_dewpoint_unit_code = weather.dewpoint_unit_code
 
