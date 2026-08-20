@@ -2,8 +2,11 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+from geoalchemy2 import Geography
+from geoalchemy2.elements import WKBElement
 from sqlalchemy import (
     Boolean,
+    Computed,
     DateTime,
     Integer,
     Numeric,
@@ -42,8 +45,31 @@ class Incident(Base):
         nullable=True,
     )
     description: Mapped[str] = mapped_column(Text)
+
     latitude: Mapped[Decimal] = mapped_column(Numeric(9, 6))
     longitude: Mapped[Decimal] = mapped_column(Numeric(9, 6))
+
+    location: Mapped[WKBElement] = mapped_column(
+        Geography(
+            geometry_type="POINT",
+            srid=4326,
+            spatial_index=False,
+        ),
+        Computed(
+            """
+            ST_SetSRID(
+                ST_MakePoint(
+                    longitude::double precision,
+                    latitude::double precision
+                ),
+                4326
+            )::geography
+            """,
+            persisted=True,
+        ),
+        nullable=False,
+    )
+
     media_urls: Mapped[list[str]] = mapped_column(
         JSONB,
         default=list,
