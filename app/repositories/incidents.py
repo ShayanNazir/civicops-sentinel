@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from geoalchemy2 import Geography
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +33,14 @@ def decimal_or_none(
     return Decimal(str(value))
 
 
+@dataclass(frozen=True, slots=True)
+class NearbyIncident:
+    """Incident returned from a spatial radius search."""
+
+    incident: Incident
+    distance_meters: float
+
+
 class IncidentRepository:
     @staticmethod
     async def create(
@@ -54,6 +64,76 @@ class IncidentRepository:
             Incident,
             incident_id,
         )
+
+    @staticmethod
+    async def find_within_radius(
+        db: AsyncSession,
+        *,
+        latitude: float,
+        longitude: float,
+        radius_meters: float,
+        limit: int = 50,
+    ) -> list[NearbyIncident]:
+        """Find incidents within a radius ordered by distance."""
+
+        if not -90 <= latitude <= 90:
+            raise ValueError("latitude must be between -90 and 90")
+
+        if not -180 <= longitude <= 180:
+            raise ValueError("longitude must be between -180 and 180")
+
+        if radius_meters <= 0:
+            raise ValueError("radius_meters must be greater than 0")
+
+        if not 1 <= limit <= 1_000:
+            raise ValueError("limit must be between 1 and 1000")
+
+        reference_point = func.ST_SetSRID(
+            func.ST_MakePoint(
+                longitude,
+                latitude,
+            ),
+            4326,
+        ).cast(
+            Geography(
+                geometry_type="POINT",
+                srid=4326,
+            )
+        )
+
+        distance = func.ST_Distance(
+            Incident.location,
+            reference_point,
+        ).label("distance_meters")
+
+        statement = (
+            select(
+                Incident,
+                distance,
+            )
+            .where(
+                func.ST_DWithin(
+                    Incident.location,
+                    reference_point,
+                    radius_meters,
+                )
+            )
+            .order_by(
+                distance.asc(),
+                Incident.id.asc(),
+            )
+            .limit(limit)
+        )
+
+        result = await db.execute(statement)
+
+        return [
+            NearbyIncident(
+                incident=incident,
+                distance_meters=float(distance_meters),
+            )
+            for incident, distance_meters in result.all()
+        ]
 
     @staticmethod
     async def list(
